@@ -1,7 +1,7 @@
 # constitute-cli Contract
 
-This repo follows the Constitution project contract hierarchy without exposing
-local workspace details in synced repository content.
+This contract defines the public development boundary for the Constitution
+console client.
 
 ## Current
 
