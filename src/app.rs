@@ -12,12 +12,14 @@ use serde_json::{Value, json};
 
 use crate::cli::*;
 use crate::config::{
-    ProfileRecord, default_config_dir, delete_profile, list_profiles, load_profile, save_profile,
+    PendingEnrollment, ProfileRecord, default_config_dir, delete_profile, list_profiles,
+    load_profile, save_profile,
 };
 use crate::doctor::run_doctor;
 use crate::interactive;
 use crate::keystore::{delete_secret, load_secret, store_secret};
 use crate::output::{print_json, print_value};
+use crate::pairing::{make_pair_code, start_output, wait_for_pairing};
 use crate::protocol_ops::{build_signed_frame, parse_payload, verify_frame_signature};
 use crate::transport::{open_transport, write_default_fixtures};
 
@@ -72,16 +74,23 @@ pub fn run_command(ctx: AppContext, cli: Cli) -> Result<()> {
 fn run_auth(ctx: AppContext, command: AuthCommand) -> Result<()> {
     match command.command {
         AuthSubcommand::Login(args) => auth_login(ctx, args),
+        AuthSubcommand::Wait(args) => auth_wait(ctx, args),
         AuthSubcommand::Status => {
             let profile = load_profile(&ctx.config_dir, &ctx.profile)?;
             print_value(ctx.json, &profile, || {
+                let enrollment = if profile.pending_enrollment.is_some() {
+                    "\nenrollment pending"
+                } else {
+                    ""
+                };
                 format!(
-                    "profile {}\ndevice {}\naccount {}\ngateway {}\nkey store {}",
+                    "profile {}\ndevice {}\naccount {}\ngateway {}\nkey store {}{}",
                     profile.profile,
                     profile.device_pk,
                     profile.account_pk.as_deref().unwrap_or("not associated"),
                     profile.gateway_pk.as_deref().unwrap_or("not set"),
-                    profile.key_store.kind
+                    profile.key_store.kind,
+                    enrollment
                 )
             })
         }
@@ -113,43 +122,88 @@ fn run_auth(ctx: AppContext, command: AuthCommand) -> Result<()> {
 }
 
 fn auth_login(ctx: AppContext, args: AuthLoginArgs) -> Result<()> {
-    if !args.manual {
-        return Err(anyhow!(
-            "only --manual enrollment is implemented in this slice"
-        ));
-    }
     let existing = load_profile(&ctx.config_dir, &ctx.profile).ok();
     if existing.is_some() && !args.force {
         return Err(anyhow!("profile already exists; pass --force to replace"));
     }
+    if !args.manual && profile_relays_empty(&args.relays) {
+        return Err(anyhow!("at least one --relay is required for pairing auth"));
+    }
+    let passphrase_arg = args.passphrase;
+    let key_store = args.key_store;
+    let is_manual = args.manual;
+    let account_pk = args.account_pk;
+    let gateway_pk = args.gateway_pk;
+    let relays = args.relays;
+    let local_gateway = args.local_gateway;
+    let device_label = args.device_label;
     let (device_pk, device_sk) = generate_keypair();
-    let passphrase = args.passphrase.as_deref().or(ctx.passphrase.as_deref());
+    let passphrase = passphrase_arg.as_deref().or(ctx.passphrase.as_deref());
     let key_ref = store_secret(
         &ctx.config_dir,
         &ctx.profile,
         &device_pk,
         &device_sk,
-        args.key_store,
+        key_store,
         passphrase,
     )?;
+    let now = crate::protocol_ops::now_unix();
     let profile = ProfileRecord {
         schema_version: 1,
         profile: ctx.profile.clone(),
-        device_pk,
-        account_pk: args.account_pk,
-        gateway_pk: args.gateway_pk,
-        relays: args.relays,
-        local_gateway_hint: args.local_gateway,
+        device_pk: device_pk.clone(),
+        account_pk: if is_manual { account_pk } else { None },
+        gateway_pk: if is_manual { gateway_pk } else { None },
+        relays,
+        local_gateway_hint: local_gateway,
+        pending_enrollment: if is_manual {
+            None
+        } else {
+            Some(PendingEnrollment {
+                code: make_pair_code(),
+                device_label,
+                created_at: now,
+                expires_at: now + 10 * 60,
+            })
+        },
         key_store: key_ref,
-        created_at: crate::protocol_ops::now_unix(),
+        created_at: now,
     };
     save_profile(&ctx.config_dir, &profile)?;
-    print_value(ctx.json, &profile, || {
+    if is_manual {
+        print_value(ctx.json, &profile, || {
+            format!(
+                "profile {} created for device {}",
+                profile.profile, profile.device_pk
+            )
+        })
+    } else {
+        let output = start_output(&profile)?;
+        print_value(ctx.json, &output, || {
+            format!(
+                "pairing code {}\nclaim this code from an already-linked account device, then run: {}",
+                output.code, output.next_command
+            )
+        })
+    }
+}
+
+fn auth_wait(ctx: AppContext, args: AuthWaitArgs) -> Result<()> {
+    let (mut profile, secret) = load_profile_and_secret(&ctx)?;
+    let output = wait_for_pairing(&profile, &secret, args.timeout_secs)?;
+    profile.account_pk = Some(output.identity_id.clone());
+    profile.pending_enrollment = None;
+    save_profile(&ctx.config_dir, &profile)?;
+    print_value(ctx.json, &output, || {
         format!(
-            "profile {} created for device {}",
-            profile.profile, profile.device_pk
+            "profile {} associated with {} ({})",
+            output.profile, output.identity_label, output.identity_id
         )
     })
+}
+
+fn profile_relays_empty(relays: &[String]) -> bool {
+    relays.iter().all(|relay| relay.trim().is_empty())
 }
 
 fn run_gateway(ctx: AppContext, command: GatewayCommand) -> Result<()> {

@@ -18,8 +18,19 @@ pub struct ProfileRecord {
     pub relays: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub local_gateway_hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_enrollment: Option<PendingEnrollment>,
     pub key_store: KeyStoreRef,
     pub created_at: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingEnrollment {
+    pub code: String,
+    pub device_label: String,
+    pub created_at: u64,
+    pub expires_at: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

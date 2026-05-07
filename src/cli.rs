@@ -43,6 +43,7 @@ pub struct AuthCommand {
 #[derive(Debug, Subcommand)]
 pub enum AuthSubcommand {
     Login(AuthLoginArgs),
+    Wait(AuthWaitArgs),
     Status,
     Logout,
     Profiles,
@@ -61,12 +62,20 @@ pub struct AuthLoginArgs {
     pub relays: Vec<String>,
     #[arg(long)]
     pub local_gateway: Option<String>,
+    #[arg(long, default_value = "Constitute CLI")]
+    pub device_label: String,
     #[arg(long, value_enum, default_value_t = KeyStoreChoice::OsPreferred)]
     pub key_store: KeyStoreChoice,
     #[arg(long)]
     pub passphrase: Option<String>,
     #[arg(long)]
     pub force: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct AuthWaitArgs {
+    #[arg(long, default_value_t = 180)]
+    pub timeout_secs: u64,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]

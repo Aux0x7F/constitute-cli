@@ -5,6 +5,7 @@ mod doctor;
 mod interactive;
 mod keystore;
 mod output;
+mod pairing;
 mod protocol_ops;
 mod transport;
 

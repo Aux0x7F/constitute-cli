@@ -34,6 +34,17 @@ material is stored through a key-store abstraction:
 The CLI generates one persistent device identity per profile. Each operation
 creates short-lived service exchange frames and request IDs.
 
+## Enrollment
+
+`constitute auth login` creates a pending CLI device profile and prints a
+six-digit pairing code. An already-linked account device claims that code from
+the account pairing UI. `constitute auth wait` observes the matching relay
+claim, publishes the signed `pair_request`, waits for `pair_approve`, decrypts
+the returned identity association, and persists the approved profile.
+
+`constitute auth login --manual` remains available for deterministic fixtures
+and isolated tests where an existing account association is injected directly.
+
 ## Transport Boundary
 
 Transport adapters carry generic protocol records. They must not expose or rely
@@ -53,4 +64,3 @@ the same trait boundary.
 - projection validation
 - diagnostics availability when requested
 - absence of forbidden raw service semantic route usage
-
