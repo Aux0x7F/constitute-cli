@@ -489,6 +489,8 @@ mod tests {
                 reason: None,
             },
             scope,
+            materialization_budget_ref: Some("logging.default.72h.low".to_string()),
+            consumer_floor_ref: Some("cli.retained-projection.floor".to_string()),
             payload_schema: None,
             payload: json!({ "events": events }),
             safe_facts: json!({}),

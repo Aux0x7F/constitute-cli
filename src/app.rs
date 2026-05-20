@@ -460,6 +460,8 @@ fn run_service(ctx: AppContext, command: ServiceCommand) -> Result<()> {
                 "type": "service.node.snapshot",
                 "service": descriptor.service,
                 "nodePath": node.path,
+                "materializationBudgetRef": projection_materialization_budget_ref(&descriptor.service, channel),
+                "consumerFloorRef": projection_consumer_floor_ref(&descriptor.service, channel),
                 "value": output
             }),
         )?;
@@ -555,6 +557,8 @@ fn request_service_projection(
             .and_then(|event| serde_json::to_value(event).ok());
         return Ok(json!({
             "projectionKey": stored.projection_key,
+            "materializationBudgetRef": projection_materialization_budget_ref(&descriptor.service, channel),
+            "consumerFloorRef": projection_consumer_floor_ref(&descriptor.service, channel),
             "projection": projection,
             "freshness": projection.freshness,
             "coverage": projection_coverage(&projection),
@@ -580,12 +584,22 @@ fn descriptor_surface_channels(
     channels
 }
 
+fn projection_materialization_budget_ref(service: &str, channel: &str) -> String {
+    format!("materialization:{service}:{channel}:bounded-snapshot")
+}
+
+fn projection_consumer_floor_ref(service: &str, channel: &str) -> String {
+    format!("consumer-floor:{service}:{channel}:cli-observer")
+}
+
 fn watch_missing_snapshot_event(service: &str, channel: &str) -> Value {
     let updated_at = now_unix() * 1000;
     json!({
         "type": "projection.snapshot",
         "service": service,
         "channelId": channel,
+        "materializationBudgetRef": projection_materialization_budget_ref(service, channel),
+        "consumerFloorRef": projection_consumer_floor_ref(service, channel),
         "freshness": {
             "state": "missing",
             "updatedAt": updated_at,

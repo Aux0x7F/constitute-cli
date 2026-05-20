@@ -166,16 +166,20 @@ fn fixture_runtime_diagnostics_query_returns_runtime_events() {
         report["events"][0]["recordKind"],
         "runtime.diagnostic.event"
     );
-    assert!(report["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|event| event["kind"] == "route.observation"));
-    assert!(report["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|event| event["kind"] == "interaction.prepared"));
+    assert!(
+        report["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "route.observation")
+    );
+    assert!(
+        report["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "interaction.prepared")
+    );
 }
 
 #[test]

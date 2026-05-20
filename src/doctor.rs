@@ -454,8 +454,7 @@ fn summarize_runtime_diagnostics(items: &[Value], steps: &mut Vec<DoctorStep>) {
                         || facts.get("failedAuthorityDomains").is_some()
                 })
                 .unwrap_or(false);
-            kind == "interaction.prepared"
-                || has_authority_facts
+            kind == "interaction.prepared" || has_authority_facts
         })
         .count();
     steps.push(pass(

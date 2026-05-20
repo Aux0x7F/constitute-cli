@@ -526,6 +526,8 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
         "service": "logging",
         "servicePk": logging_pk,
         "producer": { "service": "logging", "component": "surface" },
+        "materializationBudgetRef": "materialization:logging:logging.surface:bounded-snapshot",
+        "consumerFloorRef": "consumer-floor:logging:logging.surface:fixture-observer",
         "freshness": { "state": "fresh", "updatedAt": 1777932000, "staleAfter": 1777932600 },
         "scope": {},
         "payloadSchema": "constitute.service.surface.v1",
@@ -552,6 +554,10 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
                         "label": "Events",
                         "description": "Policy-materialized safe event stream.",
                         "backingChannel": "logging.events",
+                        "metadata": {
+                            "materializationBudgetRef": "materialization:logging:logging.events:safe-event-stream",
+                            "consumerFloorRef": "consumer-floor:logging:logging.events:surface-observer"
+                        },
                         "fields": [
                             { "fieldId": "events", "label": "Events", "valueKind": "array", "capabilities": ["read", "observe"] },
                             { "fieldId": "policy", "label": "Policy", "valueKind": "object", "capabilities": ["read", "observe", "set"] }
@@ -839,6 +845,8 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
                 "recordKinds": ["projection.snapshot", "projection.delta", "projection.repair.request"],
                 "ownerRefs": ["member-raw-runtime-1"],
                 "policyRef": "policy-projection-observe",
+                "materializationBudgetRef": "materialization:projection-observe:bounded-snapshot",
+                "consumerFloorRef": "consumer-floor:projection-observe:runtime-member",
                 "createdAt": 1777932000000u64
             }
         ],
