@@ -1,3 +1,4 @@
+// domain-owned-vocabulary: projection.repair.request service.intent
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
@@ -226,7 +227,7 @@ pub fn build_projection_observe_frame(
         }),
         capability: Some(capability.to_string()),
         body: caac_body(
-            "projection.observe",
+            constitute_protocol::CAPABILITY_PROJECTION_OBSERVE,
             json!({
                 "service": descriptor.service.clone(),
                 "channelId": channel_id,

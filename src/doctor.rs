@@ -1,3 +1,4 @@
+// domain-owned-vocabulary: directory.capability projection.observer.update runtime.descriptor.store runtime.diagnostic runtime.diagnostics.authority runtime.diagnostics.authority.failures runtime.diagnostics.projection runtime.diagnostics.route runtime.projection.open runtime.projection.save runtime.projection.store service.logging service.node.logging.events service.node.logging.events.resolve service.node.observe.boundary service.surface.logging
 use constitute_protocol::{
     CaacEnvelope, CaacValidationMode, RouteObservation, RuntimeActivationRequest,
     ServiceSurfaceProjection, StreamRoutePlan, SwarmFrame, SwarmProjectionDelta, open_envelope,
@@ -405,7 +406,7 @@ fn summarize_runtime_diagnostics(items: &[Value], steps: &mut Vec<DoctorStep>) {
         .collect();
     if runtime.is_empty() {
         steps.push(warn(
-            "runtime.diagnostics.observe",
+            constitute_protocol::CAPABILITY_RUNTIME_DIAGNOSTICS_OBSERVE,
             "no runtime diagnostic events available",
         ));
         return;
@@ -416,7 +417,7 @@ fn summarize_runtime_diagnostics(items: &[Value], steps: &mut Vec<DoctorStep>) {
         .find_map(|item| item.get("runtimeSessionId").and_then(Value::as_str))
         .unwrap_or("unknown");
     steps.push(pass(
-        "runtime.diagnostics.observe",
+        constitute_protocol::CAPABILITY_RUNTIME_DIAGNOSTICS_OBSERVE,
         format!(
             "{} runtime event(s), latest session {}",
             runtime.len(),
@@ -432,7 +433,7 @@ fn summarize_runtime_diagnostics(items: &[Value], steps: &mut Vec<DoctorStep>) {
                 .and_then(|facts| facts.get("state"))
                 .and_then(Value::as_str)
                 .unwrap_or_default();
-            kind == "route.observation"
+            kind == constitute_protocol::RECORD_ROUTE_OBSERVATION
                 && matches!(
                     state,
                     "observingUnreachable" | "unreachableFor" | "rejected"
@@ -497,7 +498,7 @@ fn summarize_runtime_diagnostics(items: &[Value], steps: &mut Vec<DoctorStep>) {
         if kind.starts_with("projection.") {
             projection_events += 1;
         }
-        if kind == "runtime.diagnostic.command.result" {
+        if kind == constitute_protocol::RECORD_RUNTIME_DIAGNOSTIC_COMMAND_RESULT {
             command_results += 1;
         }
     }
@@ -506,7 +507,7 @@ fn summarize_runtime_diagnostics(items: &[Value], steps: &mut Vec<DoctorStep>) {
         format!("{} projection inbox event(s)", projection_events),
     ));
     steps.push(pass(
-        "runtime.diagnostics.command",
+        constitute_protocol::CAPABILITY_RUNTIME_DIAGNOSTICS_COMMAND,
         format!(
             "command channel observed with {} result event(s)",
             command_results
@@ -586,17 +587,23 @@ fn run_swarm_doctor_checks(
         }
         match validate_route_observation(&convergence.route_observation) {
             Ok(()) => steps.push(pass(
-                "route.observation",
+                constitute_protocol::RECORD_ROUTE_OBSERVATION,
                 "route observation validates separately from frame intake ACK",
             )),
-            Err(err) => steps.push(fail("route.observation", err.to_string())),
+            Err(err) => steps.push(fail(
+                constitute_protocol::RECORD_ROUTE_OBSERVATION,
+                err.to_string(),
+            )),
         }
         match validate_stream_route_plan(&convergence.stream_route_plan) {
             Ok(()) => steps.push(pass(
-                "stream.routePlan",
+                constitute_protocol::RECORD_STREAM_ROUTE_PLAN,
                 "stream route plan carries selected and fallback paths",
             )),
-            Err(err) => steps.push(fail("stream.routePlan", err.to_string())),
+            Err(err) => steps.push(fail(
+                constitute_protocol::RECORD_STREAM_ROUTE_PLAN,
+                err.to_string(),
+            )),
         }
     }
     match prove_product_caac_opens(secret) {

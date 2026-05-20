@@ -1,3 +1,4 @@
+// domain-owned-vocabulary: runtime.diagnostic runtime.diagnostics service.node.snapshot
 use std::io::Write;
 
 use anyhow::{Context, Result, anyhow};
@@ -595,7 +596,7 @@ fn projection_consumer_floor_ref(service: &str, channel: &str) -> String {
 fn watch_missing_snapshot_event(service: &str, channel: &str) -> Value {
     let updated_at = now_unix() * 1000;
     json!({
-        "type": "projection.snapshot",
+        "type": constitute_protocol::RECORD_PROJECTION_SNAPSHOT,
         "service": service,
         "channelId": channel,
         "materializationBudgetRef": projection_materialization_budget_ref(service, channel),
