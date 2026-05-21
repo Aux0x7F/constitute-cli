@@ -12,6 +12,16 @@ The CLI is a convergence witness. It reports catalogue, frame intake, route,
 projection, service, storage, and diagnostics state without becoming the owner
 of browser runtime or service execution semantics.
 
+Authority proof:
+
+```bash
+constitute --json authority proof --grantee-member-ref member:agent-dev-cli
+```
+
+This emits a protocol-validated `authority.multiIdentity.proof` record for the
+Aux-to-agent full-access proof shape. The record keeps sync, read,
+write/reduce, and revoke/expire checks on their own agreement planes.
+
 Useful test-data checks:
 
 ```bash

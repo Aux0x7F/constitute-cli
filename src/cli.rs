@@ -24,6 +24,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     Auth(AuthCommand),
+    Authority(AuthorityCommand),
     Service(ServiceCommand),
     Capability(CapabilityCommand),
     Channel(ChannelCommand),
@@ -47,6 +48,43 @@ pub enum AuthSubcommand {
     Logout,
     Profiles,
     Use { profile_name: String },
+}
+
+#[derive(Debug, Args)]
+pub struct AuthorityCommand {
+    #[command(subcommand)]
+    pub command: AuthoritySubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AuthoritySubcommand {
+    Proof(AuthorityProofArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct AuthorityProofArgs {
+    #[arg(long, default_value = "identity:aux")]
+    pub owner_identity_ref: String,
+    #[arg(long, default_value = "identity:agent-dev")]
+    pub grantee_identity_ref: String,
+    #[arg(long, default_value = "member:agent-dev-browser")]
+    pub grantee_member_ref: String,
+    #[arg(long = "subject-ref")]
+    pub subject_refs: Vec<String>,
+    #[arg(long = "action-grant-ref")]
+    pub action_grant_refs: Vec<String>,
+    #[arg(long = "access-group-ref")]
+    pub access_group_refs: Vec<String>,
+    #[arg(long = "access-epoch-ref")]
+    pub access_epoch_refs: Vec<String>,
+    #[arg(long = "private-envelope-ref")]
+    pub private_envelope_refs: Vec<String>,
+    #[arg(long = "revocation-ref")]
+    pub revocation_refs: Vec<String>,
+    #[arg(long = "evidence-ref")]
+    pub evidence_refs: Vec<String>,
+    #[arg(long, default_value_t = 600)]
+    pub expires_secs: u64,
 }
 
 #[derive(Debug, Args)]

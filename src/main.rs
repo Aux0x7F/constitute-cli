@@ -1,4 +1,5 @@
 mod app;
+mod authority_ops;
 mod cli;
 mod config;
 mod doctor;
