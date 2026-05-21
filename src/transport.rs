@@ -1,3 +1,4 @@
+// domain-owned-vocabulary: logging.surface projection.gateway.gateway-devices.json projection.gateway.gateway-health.json projection.gateway.gateway-surface.json projection.logging.logging-events.json projection.logging.logging-health.json projection.logging.logging-surface.json projection.repair.request runtime.diagnostics runtime.projections service.intent swarm.directory swarm.edge swarm.edge.claims swarm.json
 use std::collections::BTreeMap;
 use std::fs;
 use std::net::TcpStream;
@@ -493,7 +494,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
         serde_json::to_vec_pretty(&descriptors[1])?,
     )?;
     let projection = json!({
-        "channelId": "logging.events",
+        "channelId": constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS,
         "service": "logging",
         "servicePk": logging_pk,
         "producer": { "service": "logging" },
@@ -526,6 +527,8 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
         "service": "logging",
         "servicePk": logging_pk,
         "producer": { "service": "logging", "component": "surface" },
+        "materializationBudgetRef": "materialization:logging:logging.surface:bounded-snapshot",
+        "consumerFloorRef": "consumer-floor:logging:logging.surface:fixture-observer",
         "freshness": { "state": "fresh", "updatedAt": 1777932000, "staleAfter": 1777932600 },
         "scope": {},
         "payloadSchema": "constitute.service.surface.v1",
@@ -547,22 +550,26 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
                 "updatedAt": 1777932000,
                 "nodes": [
                     {
-                        "nodeId": "logging.events",
+                        "nodeId": constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS,
                         "path": "events",
                         "label": "Events",
                         "description": "Policy-materialized safe event stream.",
-                        "backingChannel": "logging.events",
+                        "backingChannel": constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS,
+                        "metadata": {
+                            "materializationBudgetRef": "materialization:logging:logging.events:safe-event-stream",
+                            "consumerFloorRef": "consumer-floor:logging:logging.events:surface-observer"
+                        },
                         "fields": [
                             { "fieldId": "events", "label": "Events", "valueKind": "array", "capabilities": ["read", "observe"] },
                             { "fieldId": "policy", "label": "Policy", "valueKind": "object", "capabilities": ["read", "observe", "set"] }
                         ]
                     },
                     {
-                        "nodeId": "logging.health",
+                        "nodeId": constitute_protocol::PROJECTION_CHANNEL_LOGGING_HEALTH,
                         "path": "health",
                         "label": "Health",
                         "description": "Logging service health.",
-                        "backingChannel": "logging.health",
+                        "backingChannel": constitute_protocol::PROJECTION_CHANNEL_LOGGING_HEALTH,
                         "fields": [
                             { "fieldId": "status", "label": "Status", "valueKind": "string", "capabilities": ["read", "observe"] }
                         ]
@@ -580,7 +587,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
         serde_json::to_vec_pretty(&surface_projection)?,
     )?;
     let health_projection = json!({
-        "channelId": "logging.health",
+        "channelId": constitute_protocol::PROJECTION_CHANNEL_LOGGING_HEALTH,
         "service": "logging",
         "servicePk": logging_pk,
         "producer": { "service": "logging", "component": "health" },
@@ -716,21 +723,21 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
     let swarm_directory = json!({
         "definitions": [
             {
-                "capability": "service.intent.invoke",
+                "capability": constitute_protocol::CAPABILITY_SERVICE_INTENT_INVOKE,
                 "definitionId": "capability-def-service-intent-invoke",
                 "summary": "Invoke sealed service intents through swarm channels.",
                 "schema": { "type": "object" },
                 "authorityRefs": ["member-raw-governance"]
             },
             {
-                "capability": "projection.observe",
+                "capability": constitute_protocol::CAPABILITY_PROJECTION_OBSERVE,
                 "definitionId": "capability-def-projection-observe",
                 "summary": "Observe projection snapshots and deltas.",
                 "schema": { "type": "object" },
                 "authorityRefs": ["member-raw-governance"]
             },
             {
-                "capability": "storage.pin",
+                "capability": constitute_protocol::CAPABILITY_STORAGE_PIN,
                 "definitionId": "capability-def-storage-pin",
                 "summary": "Request object retention through storage pin records.",
                 "schema": { "type": "object" },
@@ -740,7 +747,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
         "advertisements": [
             {
                 "advertisementId": "ad-storage-pin-1",
-                "capability": "storage.pin",
+                "capability": constitute_protocol::CAPABILITY_STORAGE_PIN,
                 "memberRef": storage_pk,
                 "serviceRef": "service-raw-storage-1",
                 "channelRefs": ["channel-storage-archive", "channel-storage-pins"],
@@ -749,7 +756,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
             },
             {
                 "advertisementId": "ad-service-intent-1",
-                "capability": "service.intent.invoke",
+                "capability": constitute_protocol::CAPABILITY_SERVICE_INTENT_INVOKE,
                 "memberRef": gateway_pk,
                 "serviceRef": "service-raw-gateway-1",
                 "channelRefs": ["channel-service-intents"],
@@ -758,7 +765,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
             },
             {
                 "advertisementId": "ad-projection-observe-1",
-                "capability": "projection.observe",
+                "capability": constitute_protocol::CAPABILITY_PROJECTION_OBSERVE,
                 "memberRef": browser_pk,
                 "serviceRef": "service-raw-gateway-1",
                 "channelRefs": ["channel-projection-observe"],
@@ -769,7 +776,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
         "entries": [
             {
                 "entryId": "entry-storage-pins",
-                "capability": "storage.pin",
+                "capability": constitute_protocol::CAPABILITY_STORAGE_PIN,
                 "channelId": "channel-storage-pins",
                 "memberRef": storage_pk,
                 "serviceRef": "service-raw-storage-1",
@@ -777,7 +784,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
             },
             {
                 "entryId": "entry-storage-archive",
-                "capability": "storage.pin",
+                "capability": constitute_protocol::CAPABILITY_STORAGE_PIN,
                 "channelId": "channel-storage-archive",
                 "memberRef": storage_pk,
                 "serviceRef": "service-raw-storage-1",
@@ -785,7 +792,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
             },
             {
                 "entryId": "entry-service-intents",
-                "capability": "service.intent.invoke",
+                "capability": constitute_protocol::CAPABILITY_SERVICE_INTENT_INVOKE,
                 "channelId": "channel-service-intents",
                 "memberRef": gateway_pk,
                 "serviceRef": "service-raw-gateway-1",
@@ -793,7 +800,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
             },
             {
                 "entryId": "entry-projection-observe",
-                "capability": "projection.observe",
+                "capability": constitute_protocol::CAPABILITY_PROJECTION_OBSERVE,
                 "channelId": "channel-projection-observe",
                 "memberRef": browser_pk,
                 "serviceRef": "service-raw-gateway-1",
@@ -805,8 +812,8 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
                 "channelId": "channel-storage-archive",
                 "kind": "storage",
                 "displayName": "Storage Archive",
-                "capabilities": ["storage.pin"],
-                "recordKinds": ["storage.pin.intent", "storage.pin.attestation", "storage.availability.ref"],
+                "capabilities": [constitute_protocol::CAPABILITY_STORAGE_PIN],
+                "recordKinds": [constitute_protocol::RECORD_STORAGE_PIN_INTENT, constitute_protocol::RECORD_STORAGE_PIN_ATTESTATION, constitute_protocol::RECORD_STORAGE_AVAILABILITY_REF],
                 "ownerRefs": ["member-raw-storage-1"],
                 "policyRef": "policy-storage-shared",
                 "createdAt": 1777932000000u64
@@ -815,8 +822,8 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
                 "channelId": "channel-storage-pins",
                 "kind": "storage",
                 "displayName": "Storage Pins",
-                "capabilities": ["storage.pin"],
-                "recordKinds": ["storage.pin.intent", "storage.pin.attestation", "storage.availability.ref"],
+                "capabilities": [constitute_protocol::CAPABILITY_STORAGE_PIN],
+                "recordKinds": [constitute_protocol::RECORD_STORAGE_PIN_INTENT, constitute_protocol::RECORD_STORAGE_PIN_ATTESTATION, constitute_protocol::RECORD_STORAGE_AVAILABILITY_REF],
                 "ownerRefs": ["member-raw-storage-1"],
                 "policyRef": "policy-storage-shared",
                 "createdAt": 1777932000000u64
@@ -825,8 +832,8 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
                 "channelId": "channel-service-intents",
                 "kind": "service",
                 "displayName": "Service Intents",
-                "capabilities": ["service.intent.invoke"],
-                "recordKinds": ["service.intent", "service.response", "ack", "reject"],
+                "capabilities": [constitute_protocol::CAPABILITY_SERVICE_INTENT_INVOKE],
+                "recordKinds": ["service.intent", constitute_protocol::RECORD_SERVICE_RESPONSE, "ack", "reject"],
                 "ownerRefs": ["member-raw-gateway-1"],
                 "policyRef": "policy-service-intents",
                 "createdAt": 1777932000000u64
@@ -835,10 +842,12 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
                 "channelId": "channel-projection-observe",
                 "kind": "projection",
                 "displayName": "Projection Observe",
-                "capabilities": ["projection.observe"],
-                "recordKinds": ["projection.snapshot", "projection.delta", "projection.repair.request"],
+                "capabilities": [constitute_protocol::CAPABILITY_PROJECTION_OBSERVE],
+                "recordKinds": [constitute_protocol::RECORD_PROJECTION_SNAPSHOT, constitute_protocol::RECORD_PROJECTION_DELTA, "projection.repair.request"],
                 "ownerRefs": ["member-raw-runtime-1"],
                 "policyRef": "policy-projection-observe",
+                "materializationBudgetRef": "materialization:projection-observe:bounded-snapshot",
+                "consumerFloorRef": "consumer-floor:projection-observe:runtime-member",
                 "createdAt": 1777932000000u64
             }
         ],
@@ -887,10 +896,10 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
             "safeFacts": { "ok": true }
         },
         {
-            "recordKind": "runtime.diagnostic.event",
+            "recordKind": constitute_protocol::RECORD_RUNTIME_DIAGNOSTIC_EVENT,
             "channelId": "runtime.diagnostics",
             "eventId": "runtime-event-fixture-1",
-            "kind": "route.observation",
+            "kind": constitute_protocol::RECORD_ROUTE_OBSERVATION,
             "level": "warn",
             "observedAt": 4777932100000u64,
             "buildId": "runtime-2.21",
@@ -914,7 +923,7 @@ pub fn write_default_fixtures(dir: &Path) -> Result<()> {
             }
         },
         {
-            "recordKind": "runtime.diagnostic.event",
+            "recordKind": constitute_protocol::RECORD_RUNTIME_DIAGNOSTIC_EVENT,
             "channelId": "runtime.diagnostics",
             "eventId": "runtime-event-fixture-2",
             "kind": "interaction.prepared",
@@ -1603,7 +1612,7 @@ fn edge_outcome_from_value(value: &Value, device_secret: Option<&str>) -> Result
         validate_swarm_edge_accept(&accept)?;
         return Ok(EdgeWireOutcome::Accept(accept));
     }
-    if record_type == "swarm.edge.reject" || record_type == "reject" {
+    if record_type == constitute_protocol::SWARM_EDGE_WIRE_REJECT || record_type == "reject" {
         return Ok(EdgeWireOutcome::Reject(reject_from_value(value)));
     }
     if record_type == "swarm.directory"
@@ -1623,20 +1632,26 @@ fn edge_outcome_from_value(value: &Value, device_secret: Option<&str>) -> Result
     if let Some(projection) = extract_projection_value(value, device_secret)? {
         return Ok(EdgeWireOutcome::Projection(projection));
     }
-    if let Some(route_observation) =
-        extract_kinded_record(value, "routeObservation", "route.observation")?
-    {
+    if let Some(route_observation) = extract_kinded_record(
+        value,
+        "routeObservation",
+        constitute_protocol::RECORD_ROUTE_OBSERVATION,
+    )? {
         validate_route_observation(&serde_json::from_value(route_observation.clone())?)?;
         return Ok(EdgeWireOutcome::RouteObservation(route_observation));
     }
-    if let Some(service_response) =
-        extract_kinded_record(value, "serviceResponse", "service.response")?
-    {
+    if let Some(service_response) = extract_kinded_record(
+        value,
+        "serviceResponse",
+        constitute_protocol::RECORD_SERVICE_RESPONSE,
+    )? {
         return Ok(EdgeWireOutcome::ServiceResponse(service_response));
     }
-    if let Some(stream_route_plan) =
-        extract_kinded_record(value, "streamRoutePlan", "stream.routePlan")?
-    {
+    if let Some(stream_route_plan) = extract_kinded_record(
+        value,
+        "streamRoutePlan",
+        constitute_protocol::RECORD_STREAM_ROUTE_PLAN,
+    )? {
         return Ok(EdgeWireOutcome::StreamRoutePlan(stream_route_plan));
     }
     Ok(EdgeWireOutcome::Other)
@@ -1674,9 +1689,11 @@ fn edge_outcome_from_frame_value(
         }
         SwarmFrameKind::RouteObservation => match opened_frame_payload(&frame, device_secret)? {
             OpenedFramePayload::Opened(payload) => {
-                if let Some(route_observation) =
-                    extract_kinded_record(&payload, "routeObservation", "route.observation")?
-                {
+                if let Some(route_observation) = extract_kinded_record(
+                    &payload,
+                    "routeObservation",
+                    constitute_protocol::RECORD_ROUTE_OBSERVATION,
+                )? {
                     validate_route_observation(&serde_json::from_value(
                         route_observation.clone(),
                     )?)?;
@@ -1692,9 +1709,11 @@ fn edge_outcome_from_frame_value(
         },
         SwarmFrameKind::ServiceResponse => match opened_frame_payload(&frame, device_secret)? {
             OpenedFramePayload::Opened(payload) => {
-                if let Some(service_response) =
-                    extract_kinded_record(&payload, "serviceResponse", "service.response")?
-                {
+                if let Some(service_response) = extract_kinded_record(
+                    &payload,
+                    "serviceResponse",
+                    constitute_protocol::RECORD_SERVICE_RESPONSE,
+                )? {
                     Ok(EdgeWireOutcome::ServiceResponse(service_response))
                 } else {
                     Ok(EdgeWireOutcome::Other)
@@ -1707,9 +1726,11 @@ fn edge_outcome_from_frame_value(
         },
         SwarmFrameKind::StreamRoutePlan => match opened_frame_payload(&frame, device_secret)? {
             OpenedFramePayload::Opened(payload) => {
-                if let Some(plan) =
-                    extract_kinded_record(&payload, "streamRoutePlan", "stream.routePlan")?
-                {
+                if let Some(plan) = extract_kinded_record(
+                    &payload,
+                    "streamRoutePlan",
+                    constitute_protocol::RECORD_STREAM_ROUTE_PLAN,
+                )? {
                     Ok(EdgeWireOutcome::StreamRoutePlan(plan))
                 } else {
                     Ok(EdgeWireOutcome::Other)
@@ -1863,7 +1884,7 @@ fn build_directory_observe_frame(
         }),
         capability: Some(constitute_protocol::CAPABILITY_PROJECTION_OBSERVE.to_string()),
         body: product_caac_body(
-            "projection.observe",
+            constitute_protocol::CAPABILITY_PROJECTION_OBSERVE,
             json!({
                 "directory": "capability",
                 "channelId": "swarm.directory"
@@ -2571,7 +2592,10 @@ mod tests {
             )
             .expect("projection");
 
-        assert_eq!(projection["projection"]["channelId"], "logging.events");
+        assert_eq!(
+            projection["projection"]["channelId"],
+            constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS
+        );
         assert_eq!(
             projection["projection"]["payload"]["events"][0]["eventId"],
             "edge-event"
@@ -2618,9 +2642,12 @@ mod tests {
         let transport = live_transport(&url);
 
         let directory = transport.swarm_directory().expect("directory");
-        let lookup =
-            crate::swarm_ops::capability_lookup(&directory, "storage.pin", now_unix() * 1000)
-                .expect("capability");
+        let lookup = crate::swarm_ops::capability_lookup(
+            &directory,
+            constitute_protocol::CAPABILITY_STORAGE_PIN,
+            now_unix() * 1000,
+        )
+        .expect("capability");
 
         assert_eq!(lookup.channels.len(), 1);
         assert_eq!(lookup.channels[0].channel_id, "channel-storage-pins");
@@ -2746,7 +2773,7 @@ mod tests {
             expires_at: Some(now_ms + 90_000),
             nonce: nonce.to_string(),
             correlation_id: Some(id.to_string()),
-            channel_id: Some("logging.events".to_string()),
+            channel_id: Some(constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS.to_string()),
             record_ref: None,
             capability: Some(constitute_protocol::CAPABILITY_SERVICE_INTENT_INVOKE.to_string()),
             body: SwarmFrameBody {
@@ -2764,7 +2791,7 @@ mod tests {
 
     fn projection_message_frame(now_ms: u64) -> SwarmFrame {
         let projection = json!({
-            "channelId": "logging.events",
+            "channelId": constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS,
             "service": "logging",
             "servicePk": "service-raw-logging",
             "producer": { "service": "logging" },
@@ -2789,11 +2816,11 @@ mod tests {
             expires_at: None,
             nonce: format!("projection-{}", uuid::Uuid::new_v4().simple()),
             correlation_id: Some("projection-response".to_string()),
-            channel_id: Some("logging.events".to_string()),
+            channel_id: Some(constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS.to_string()),
             record_ref: None,
             capability: Some(constitute_protocol::CAPABILITY_PROJECTION_OBSERVE.to_string()),
             body: product_caac_body(
-                "projection.snapshot",
+                constitute_protocol::RECORD_PROJECTION_SNAPSHOT,
                 json!({ "projection": projection }),
                 GATEWAY_SK,
                 &[pubkey_from_sk_hex(DEVICE_SK).unwrap()],
@@ -2808,7 +2835,7 @@ mod tests {
 
     fn route_observation_frame(observed: &SwarmFrame, now_ms: u64) -> SwarmFrame {
         let observation = json!({
-            "kind": "route.observation",
+            "kind": constitute_protocol::RECORD_ROUTE_OBSERVATION,
             "observationId": format!("route-observation-{}", uuid::Uuid::new_v4().simple()),
             "state": "delivered",
             "frameId": observed.frame_id.clone(),
@@ -2832,13 +2859,13 @@ mod tests {
             correlation_id: observed.correlation_id.clone(),
             channel_id: observed.channel_id.clone(),
             record_ref: Some(constitute_protocol::SwarmRecordRef {
-                kind: "route.observation".to_string(),
+                kind: constitute_protocol::RECORD_ROUTE_OBSERVATION.to_string(),
                 id: observation["observationId"].as_str().unwrap().to_string(),
                 revision: Some(1),
             }),
             capability: Some(constitute_protocol::CAPABILITY_ROUTE_OBSERVATION_PUBLISH.to_string()),
             body: product_caac_body(
-                "route.observation",
+                constitute_protocol::RECORD_ROUTE_OBSERVATION,
                 json!({ "routeObservation": observation }),
                 GATEWAY_SK,
                 &[pubkey_from_sk_hex(DEVICE_SK).unwrap()],
@@ -2855,7 +2882,7 @@ mod tests {
         let storage_pk = pubkey_from_sk_hex(DEVICE_SK).unwrap();
         serde_json::from_value(json!({
             "definitions": [{
-                "capability": "storage.pin",
+                "capability": constitute_protocol::CAPABILITY_STORAGE_PIN,
                 "definitionId": "capability-def-storage-pin",
                 "summary": "Pin storage.",
                 "schema": {},
@@ -2863,7 +2890,7 @@ mod tests {
             }],
             "advertisements": [{
                 "advertisementId": "ad-storage-pin",
-                "capability": "storage.pin",
+                "capability": constitute_protocol::CAPABILITY_STORAGE_PIN,
                 "memberRef": storage_pk,
                 "serviceRef": "service-raw-storage",
                 "channelRefs": ["channel-storage-pins"],
@@ -2872,7 +2899,7 @@ mod tests {
             }],
             "entries": [{
                 "entryId": "entry-storage-pins",
-                "capability": "storage.pin",
+                "capability": constitute_protocol::CAPABILITY_STORAGE_PIN,
                 "channelId": "channel-storage-pins",
                 "memberRef": storage_pk,
                 "serviceRef": "service-raw-storage",
@@ -2882,8 +2909,8 @@ mod tests {
                 "channelId": "channel-storage-pins",
                 "kind": "storage",
                 "displayName": "Storage Pins",
-                "capabilities": ["storage.pin"],
-                "recordKinds": ["storage.pin.intent"],
+                "capabilities": [constitute_protocol::CAPABILITY_STORAGE_PIN],
+                "recordKinds": [constitute_protocol::RECORD_STORAGE_PIN_INTENT],
                 "ownerRefs": ["member-raw-storage"],
                 "policyRef": "policy-storage",
                 "createdAt": 1

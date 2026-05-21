@@ -103,7 +103,7 @@ fn fixture_doctor_verifies_full_protocol_flow() {
     assert!(
         steps
             .iter()
-            .any(|s| s["name"] == "runtime.diagnostics.observe")
+            .any(|s| s["name"] == constitute_protocol::CAPABILITY_RUNTIME_DIAGNOSTICS_OBSERVE)
     );
     assert!(
         steps
@@ -164,18 +164,22 @@ fn fixture_runtime_diagnostics_query_returns_runtime_events() {
     assert_eq!(report["count"], 2);
     assert_eq!(
         report["events"][0]["recordKind"],
-        "runtime.diagnostic.event"
+        constitute_protocol::RECORD_RUNTIME_DIAGNOSTIC_EVENT
     );
-    assert!(report["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|event| event["kind"] == "route.observation"));
-    assert!(report["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|event| event["kind"] == "interaction.prepared"));
+    assert!(
+        report["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == constitute_protocol::RECORD_ROUTE_OBSERVATION)
+    );
+    assert!(
+        report["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "interaction.prepared")
+    );
 }
 
 #[test]
@@ -196,7 +200,7 @@ fn fixture_capability_returns_definition_and_active_entries() {
             fixture_dir.to_str().unwrap(),
             "--json",
             "capability",
-            "storage.pin",
+            constitute_protocol::CAPABILITY_STORAGE_PIN,
         ])
         .assert()
         .success()
@@ -205,7 +209,10 @@ fn fixture_capability_returns_definition_and_active_entries() {
         .clone();
 
     let value: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(value["definition"]["capability"], "storage.pin");
+    assert_eq!(
+        value["definition"]["capability"],
+        constitute_protocol::CAPABILITY_STORAGE_PIN
+    );
     assert_eq!(value["entries"].as_array().unwrap().len(), 2);
     assert!(
         value["activeAdvertisements"]
@@ -236,7 +243,7 @@ fn fixture_channel_list_returns_sorted_channels_for_capability() {
             "channel",
             "list",
             "--capability",
-            "storage.pin",
+            constitute_protocol::CAPABILITY_STORAGE_PIN,
         ])
         .assert()
         .success()
@@ -280,7 +287,7 @@ fn fixture_channel_create_emits_valid_sealed_swarm_frame() {
             "channel",
             "create",
             "--capability",
-            "storage.pin",
+            constitute_protocol::CAPABILITY_STORAGE_PIN,
         ])
         .assert()
         .success()
@@ -289,7 +296,10 @@ fn fixture_channel_create_emits_valid_sealed_swarm_frame() {
         .clone();
 
     let frame: constitute_protocol::SwarmFrame = serde_json::from_slice(&output).unwrap();
-    assert_eq!(frame.capability.as_deref(), Some("storage.pin"));
+    assert_eq!(
+        frame.capability.as_deref(),
+        Some(constitute_protocol::CAPABILITY_STORAGE_PIN)
+    );
     assert_eq!(frame.body.encoding, "caac");
     assert!(frame.body.envelope.as_ref().unwrap().is_object());
     assert!(frame.body.payload.is_none());
@@ -399,7 +409,10 @@ fn service_node_access_materializes_fixture_projection_runtime_state() {
         .clone();
 
     let value: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(value["projection"]["channelId"], "logging.events");
+    assert_eq!(
+        value["projection"]["channelId"],
+        constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS
+    );
     assert_eq!(
         value["projectionKey"],
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|logging.events|default"

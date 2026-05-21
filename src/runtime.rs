@@ -1,3 +1,4 @@
+// domain-owned-vocabulary: logging.default.72h.low projection.observer.update
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -474,7 +475,7 @@ mod tests {
 
     fn projection(events: Vec<Value>, scope: Value) -> ProjectionRecord {
         ProjectionRecord {
-            channel_id: "logging.events".to_string(),
+            channel_id: constitute_protocol::PROJECTION_CHANNEL_LOGGING_EVENTS.to_string(),
             service: "logging".to_string(),
             service_pk: "svc".to_string(),
             producer: json!({}),
@@ -489,6 +490,8 @@ mod tests {
                 reason: None,
             },
             scope,
+            materialization_budget_ref: Some("logging.default.72h.low".to_string()),
+            consumer_floor_ref: Some("cli.retained-projection.floor".to_string()),
             payload_schema: None,
             payload: json!({ "events": events }),
             safe_facts: json!({}),

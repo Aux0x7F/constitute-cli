@@ -1,3 +1,4 @@
+// domain-owned-vocabulary: projection.repair.request service.intent
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
@@ -226,7 +227,7 @@ pub fn build_projection_observe_frame(
         }),
         capability: Some(capability.to_string()),
         body: caac_body(
-            "projection.observe",
+            constitute_protocol::CAPABILITY_PROJECTION_OBSERVE,
             json!({
                 "service": descriptor.service.clone(),
                 "channelId": channel_id,
@@ -516,22 +517,30 @@ pub fn shared_infra_uses_boundary_refs(directory: &SwarmDirectory) -> bool {
         .entries
         .iter()
         .map(|entry| entry.member_ref.as_deref())
-        .chain(directory.advertisements.iter().flat_map(|advertisement| {
-            [advertisement.member_ref.as_deref()]
-        }))
+        .chain(
+            directory
+                .advertisements
+                .iter()
+                .flat_map(|advertisement| [advertisement.member_ref.as_deref()]),
+        )
         .flatten()
         .filter(|value| !value.trim().is_empty());
     let service_refs = directory
         .entries
         .iter()
         .map(|entry| entry.service_ref.as_deref())
-        .chain(directory.advertisements.iter().flat_map(|advertisement| {
-            [advertisement.service_ref.as_deref()]
-        }))
+        .chain(
+            directory
+                .advertisements
+                .iter()
+                .flat_map(|advertisement| [advertisement.service_ref.as_deref()]),
+        )
         .flatten()
         .filter(|value| !value.trim().is_empty());
     member_refs.into_iter().all(is_resolved_member_ref)
-        && service_refs.into_iter().all(|value| value.starts_with("service-raw-"))
+        && service_refs
+            .into_iter()
+            .all(|value| value.starts_with("service-raw-"))
 }
 
 fn is_resolved_member_ref(value: &str) -> bool {
