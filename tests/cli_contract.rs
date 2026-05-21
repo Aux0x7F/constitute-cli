@@ -44,12 +44,66 @@ fn help_exposes_protocol_native_commands() {
             "Protocol-native Constitution console client",
         ))
         .stdout(predicate::str::contains("doctor"))
+        .stdout(predicate::str::contains("authority"))
         .stdout(predicate::str::contains("service"))
         .stdout(predicate::str::contains("capability"))
         .stdout(predicate::str::contains("channel"))
         .stdout(predicate::str::contains("diagnostics"))
         .stdout(predicate::str::contains("protocol"))
         .stdout(predicate::str::contains("config"));
+}
+
+#[test]
+fn authority_proof_outputs_multi_identity_contract() {
+    let output = Command::cargo_bin("constitute")
+        .unwrap()
+        .args([
+            "--json",
+            "authority",
+            "proof",
+            "--owner-identity-ref",
+            "identity:aux",
+            "--grantee-identity-ref",
+            "identity:agent-dev",
+            "--grantee-member-ref",
+            "member:agent-dev-cli",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let proof: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(
+        proof["kind"],
+        constitute_protocol::RECORD_AUTHORITY_MULTI_IDENTITY_PROOF
+    );
+    assert_eq!(proof["ownerIdentityRef"], "identity:aux");
+    assert_eq!(proof["granteeIdentityRef"], "identity:agent-dev");
+    assert_eq!(proof["granteeMemberRef"], "member:agent-dev-cli");
+    assert_eq!(
+        proof["state"],
+        constitute_protocol::AUTHORITY_PROOF_STATE_PROVED
+    );
+
+    let checks = proof["checks"].as_array().unwrap();
+    assert!(checks.iter().any(|check| {
+        check["check"] == constitute_protocol::AUTHORITY_PROOF_CHECK_SYNC
+            && check["plane"] == constitute_protocol::AGREEMENT_PLANE_DELIVERY_WITNESS
+    }));
+    assert!(checks.iter().any(|check| {
+        check["check"] == constitute_protocol::AUTHORITY_PROOF_CHECK_READ
+            && check["plane"] == constitute_protocol::AGREEMENT_PLANE_ACCESS_AUTHORITY
+    }));
+    assert!(checks.iter().any(|check| {
+        check["check"] == constitute_protocol::AUTHORITY_PROOF_CHECK_WRITE_REDUCE
+            && check["plane"] == constitute_protocol::AGREEMENT_PLANE_ACTION_AUTHORITY
+    }));
+    assert!(checks.iter().any(|check| {
+        check["check"] == constitute_protocol::AUTHORITY_PROOF_CHECK_REVOKE_EXPIRE
+            && check["plane"] == constitute_protocol::AGREEMENT_PLANE_ACTION_AUTHORITY
+    }));
 }
 
 #[test]

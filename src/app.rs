@@ -10,6 +10,7 @@ use constitute_protocol::{
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::authority_ops::build_authority_proof;
 use crate::cli::*;
 use crate::config::{
     PendingEnrollment, ProfileRecord, delete_profile, list_profiles, load_profile, save_profile,
@@ -33,6 +34,7 @@ pub fn run_command(ctx: AppContext, cli: Cli) -> Result<()> {
     match cli.command {
         None => interactive::run(),
         Some(Command::Auth(command)) => run_auth(ctx, command),
+        Some(Command::Authority(command)) => run_authority(ctx, command),
         Some(Command::Service(command)) => run_service(ctx, command),
         Some(Command::Capability(command)) => run_capability(ctx, command),
         Some(Command::Channel(command)) => run_channel(ctx, command),
@@ -49,6 +51,28 @@ pub fn run_command(ctx: AppContext, cli: Cli) -> Result<()> {
             }
         }
     }
+}
+
+fn run_authority(ctx: AppContext, command: AuthorityCommand) -> Result<()> {
+    match command.command {
+        AuthoritySubcommand::Proof(args) => {
+            let proof = build_authority_proof(&args)?;
+            print_value(ctx.json, &proof, || human_authority_proof(&proof))
+        }
+    }
+}
+
+fn human_authority_proof(proof: &constitute_protocol::AuthorityMultiIdentityProofRecord) -> String {
+    format!(
+        "authority proof {}\nowner {}\ngrantee {}\nsubjects {}\naction grants {}\naccess groups {}\nstate {}",
+        proof.proof_id,
+        proof.owner_identity_ref,
+        proof.grantee_identity_ref,
+        proof.subject_refs.len(),
+        proof.action_grant_refs.len(),
+        proof.access_group_refs.len(),
+        proof.state
+    )
 }
 
 fn run_diagnostics(ctx: AppContext, command: DiagnosticsCommand) -> Result<()> {
