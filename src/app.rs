@@ -1,14 +1,20 @@
-// domain-owned-vocabulary: runtime.diagnostic runtime.diagnostics service.node.snapshot
+// domain-owned-vocabulary: runtime.diagnostic runtime.diagnostics service.node.snapshot test.contract-run.input.posture test.contract-run.materialization browser.managed-launch.intent
+use std::fs;
 use std::io::Write;
 
 use anyhow::{Context, Result, anyhow};
 use constitute_protocol::{
-    HostedServiceDescriptor, ProjectionRecord, ServiceNodeSetRequest, ServiceSurfaceProjection,
+    HostedServiceDescriptor, ProjectionRecord, RECORD_SERVICE_MANAGER_OPERATION_POSTURE,
+    RECORD_SOURCE_SNAPSHOT, SERVICE_MANAGER_OPERATION_STATE_REQUESTED,
+    SOURCE_SIGNATURE_POSTURE_DEV_UNSIGNED, ServiceManagerOperationPostureRecord,
+    ServiceNodeSetRequest, ServiceSurfaceProjection, SourceFileEntry, SourceSnapshot,
     generate_keypair, validate_hosted_service_descriptor, validate_projection_record,
-    validate_service_node_set_request, validate_service_surface,
+    validate_service_manager_operation_posture, validate_service_node_set_request,
+    validate_service_surface, validate_source_snapshot,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 use crate::authority_ops::build_authority_proof;
 use crate::cli::*;
@@ -35,6 +41,9 @@ pub fn run_command(ctx: AppContext, cli: Cli) -> Result<()> {
         None => interactive::run(),
         Some(Command::Auth(command)) => run_auth(ctx, command),
         Some(Command::Authority(command)) => run_authority(ctx, command),
+        Some(Command::Source(command)) => run_source(ctx, command),
+        Some(Command::Test(command)) => run_test(ctx, command),
+        Some(Command::Lifecycle(command)) => run_lifecycle(ctx, command),
         Some(Command::Service(command)) => run_service(ctx, command),
         Some(Command::Capability(command)) => run_capability(ctx, command),
         Some(Command::Channel(command)) => run_channel(ctx, command),
@@ -51,6 +60,454 @@ pub fn run_command(ctx: AppContext, cli: Cli) -> Result<()> {
             }
         }
     }
+}
+
+fn input_field_string(input: Option<&Value>, key: &str, fallback: &str) -> String {
+    input
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_str)
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn input_field_string_list(input: Option<&Value>, key: &str, fallback: &[String]) -> Vec<String> {
+    input
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_else(|| fallback.to_vec())
+}
+
+fn source_candidate_input(input: &Option<std::path::PathBuf>) -> Result<Option<Value>> {
+    let Some(path) = input else {
+        return Ok(None);
+    };
+    let bytes = fs::read(path)
+        .with_context(|| format!("read source candidate input {}", path.display()))?;
+    let value: Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("parse source candidate input {}", path.display()))?;
+    let kind = value.get("kind").and_then(Value::as_str).unwrap_or("");
+    if !matches!(
+        kind,
+        "source.candidate.input.posture"
+            | "authoring.edit-intent.posture"
+            | "authoring.candidate-fixture.posture"
+    ) {
+        return Err(anyhow!(
+            "unsupported source candidate input posture kind '{}'",
+            kind
+        ));
+    }
+    Ok(Some(value))
+}
+
+fn run_source(ctx: AppContext, command: SourceCommand) -> Result<()> {
+    match command.command {
+        SourceSubcommand::Candidate(args) => {
+            let input = source_candidate_input(&args.input)?;
+            let input_ref = input.as_ref();
+            let source_graph_ref =
+                input_field_string(input_ref, "sourceGraphRef", &args.source_graph_ref);
+            let parent_snapshot_ref =
+                input_field_string(input_ref, "parentSnapshotRef", &args.parent_snapshot_ref);
+            let candidate_ref = input_field_string(input_ref, "candidateRef", &args.candidate_ref);
+            let author_ref = input_field_string(input_ref, "authorRef", &args.author_ref);
+            let file_ref = input_field_string(input_ref, "fileRef", &args.file_ref);
+            let path_ref = input_field_string(input_ref, "pathRef", &args.path_ref);
+            let virtual_path = input_field_string(input_ref, "virtualPath", &args.virtual_path);
+            let content = input_field_string(input_ref, "content", &args.content);
+            let storage_container_ref = input_field_string(
+                input_ref,
+                "storageContainerRef",
+                &args.storage_container_ref,
+            );
+            let branch_refs = input_field_string_list(input_ref, "branchRefs", &args.branch_refs);
+            let writer_grant_refs =
+                input_field_string_list(input_ref, "writerGrantRefs", &args.writer_grant_refs);
+            let authority_refs =
+                input_field_string_list(input_ref, "authorityRefs", &args.authority_refs);
+            let dirty_projection_refs = input_field_string_list(
+                input_ref,
+                "dirtyProjectionRefs",
+                &args.dirty_projection_refs,
+            );
+            let evidence_refs =
+                input_field_string_list(input_ref, "evidenceRefs", &args.evidence_refs);
+            let issued_at = now_unix();
+            let content_bytes = content.as_bytes();
+            let chunk_hash = sha256_hex(content_bytes);
+            let content_hash = sha256_hex(chunk_hash.as_bytes());
+            let object_id = storage_object_id(&storage_container_ref, &content_hash);
+            let tree_hash = sha256_hex(
+                format!("{}:{}:{}", source_graph_ref, candidate_ref, object_id).as_bytes(),
+            );
+            let storage_object_ref = format!("storage:object:{object_id}");
+            let snapshot = SourceSnapshot {
+                kind: Some(RECORD_SOURCE_SNAPSHOT.to_string()),
+                source_graph_ref,
+                snapshot_ref: format!("source:snapshot:candidate:{}", &tree_hash[..20]),
+                commit_ref: format!("source:commit:candidate:{}", &tree_hash[..20]),
+                tree_ref: format!("source:tree:candidate:{}", &tree_hash[..20]),
+                tree_hash_ref: format!("sha256:{tree_hash}"),
+                parent_snapshot_refs: vec![parent_snapshot_ref],
+                file_entries: vec![SourceFileEntry {
+                    file_ref,
+                    path_ref,
+                    virtual_path,
+                    hash_ref: format!("sha256:{chunk_hash}"),
+                    byte_length: content_bytes.len() as u64,
+                    storage_object_ref: Some(storage_object_ref.clone()),
+                    evidence_refs: if input.is_some() {
+                        vec!["evidence:source-candidate:typed-input-posture".to_string()]
+                    } else {
+                        vec!["evidence:source-candidate:typed-flags".to_string()]
+                    },
+                }],
+                storage_object_refs: vec![storage_object_ref],
+                author_ref,
+                signature_posture: SOURCE_SIGNATURE_POSTURE_DEV_UNSIGNED.to_string(),
+                message_digest_ref: format!(
+                    "message-digest:source-candidate:{}",
+                    &content_hash[..20]
+                ),
+                branch_refs,
+                candidate_refs: vec![candidate_ref],
+                writer_grant_refs,
+                authority_refs,
+                materialized_projection_refs: vec![],
+                dirty_projection_refs,
+                signature_refs: vec![],
+                evidence_refs: if evidence_refs.is_empty() {
+                    if input.is_some() {
+                        vec!["evidence:source-candidate:typed-input-posture".to_string()]
+                    } else {
+                        vec!["evidence:source-candidate:typed-flags".to_string()]
+                    }
+                } else {
+                    evidence_refs
+                },
+                issued_at,
+            };
+            validate_source_snapshot(&snapshot)?;
+            print_value(ctx.json, &snapshot, || human_source_candidate(&snapshot))
+        }
+    }
+}
+
+fn human_source_candidate(snapshot: &SourceSnapshot) -> String {
+    format!(
+        "source candidate {}\nparent {}\nfiles {}\nstorage {}",
+        snapshot.snapshot_ref,
+        snapshot
+            .parent_snapshot_refs
+            .first()
+            .cloned()
+            .unwrap_or_default(),
+        snapshot.file_entries.len(),
+        snapshot.storage_object_refs.len()
+    )
+}
+
+fn test_run_input(input: &Option<std::path::PathBuf>) -> Result<Option<Value>> {
+    let Some(path) = input else {
+        return Ok(None);
+    };
+    let bytes =
+        fs::read(path).with_context(|| format!("read test run input {}", path.display()))?;
+    let value: Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("parse test run input {}", path.display()))?;
+    let kind = value.get("kind").and_then(Value::as_str).unwrap_or("");
+    if !matches!(
+        kind,
+        "test.contract-run.input.posture" | "contract.test-run.input.posture"
+    ) {
+        return Err(anyhow!(
+            "unsupported test run input posture kind '{}'",
+            kind
+        ));
+    }
+    Ok(Some(value))
+}
+
+fn run_test(ctx: AppContext, command: TestCommand) -> Result<()> {
+    match command.command {
+        TestSubcommand::Run(args) => {
+            let input = test_run_input(&args.input)?;
+            let input_ref = input.as_ref();
+            let run_ref = input_field_string(input_ref, "runRef", &args.run_ref);
+            let test_contract_ref =
+                input_field_string(input_ref, "testContractRef", &args.test_contract_ref);
+            let requester_ref = input_field_string(input_ref, "requesterRef", &args.requester_ref);
+            let app_ref = input_field_string(input_ref, "appRef", &args.app_ref);
+            let app_subversion_ref =
+                input_field_string(input_ref, "appSubversionRef", &args.app_subversion_ref);
+            let profile_ref = input_field_string(input_ref, "profileRef", &args.profile_ref);
+            let runtime_ref = input_field_string(input_ref, "runtimeRef", &args.runtime_ref);
+            let gateway_ref = input_field_string(input_ref, "gatewayRef", &args.gateway_ref);
+            let selected_flow_ref =
+                input_field_string(input_ref, "selectedFlowRef", &args.selected_flow_ref);
+            let fulfillment_session_ref = input_field_string(
+                input_ref,
+                "fulfillmentSessionRef",
+                &args.fulfillment_session_ref,
+            );
+            let managed_launch_edge_ref = input_field_string(
+                input_ref,
+                "managedLaunchEdgeRef",
+                &args.managed_launch_edge_ref,
+            );
+            let retention_policy_ref =
+                input_field_string(input_ref, "retentionPolicyRef", &args.retention_policy_ref);
+            let evidence_refs =
+                input_field_string_list(input_ref, "evidenceRefs", &args.evidence_refs);
+            let observation_refs =
+                input_field_string_list(input_ref, "observationRefs", &args.observation_refs);
+            let mut materialization_refs = input_field_string_list(
+                input_ref,
+                "materializationRefs",
+                &args.materialization_refs,
+            );
+            let issued_at = now_unix();
+            let digest = sha256_hex(
+                format!(
+                    "{run_ref}|{test_contract_ref}|{app_subversion_ref}|{profile_ref}|{selected_flow_ref}|{fulfillment_session_ref}"
+                )
+                .as_bytes(),
+            );
+            let materialization_ref =
+                format!("materialization:test-contract-run:{}", &digest[..20]);
+            if materialization_refs.is_empty() {
+                materialization_refs.push(materialization_ref.clone());
+            }
+            let launch_intent_ref = format!("browser-launch-intent:{}", &digest[..20]);
+            let required_live_evidence_refs = vec![
+                format!("evidence:managed-firefox-launch:{}", &digest[..20]),
+                format!("evidence:runtime-bootstrap:{}", &digest[..20]),
+                format!("evidence:gateway-connection:{}", &digest[..20]),
+                format!("evidence:fulfillment-session-observation:{}", &digest[..20]),
+            ];
+            let live_state = if observation_refs.is_empty() {
+                "pending"
+            } else {
+                "evidenceMaterialized"
+            };
+            let output = json!({
+                "kind": "test.contract-run.materialization",
+                "state": "ready",
+                "runRef": run_ref,
+                "testContractRef": test_contract_ref,
+                "requesterRef": requester_ref,
+                "appRef": app_ref,
+                "appSubversionRef": app_subversion_ref,
+                "profileRef": profile_ref,
+                "issuedAt": issued_at,
+                "selectedRuntime": {
+                    "runtimeRef": runtime_ref,
+                    "gatewayRef": gateway_ref,
+                    "staticBootstrapIntoSwarm": true,
+                    "safeFacts": {
+                        "nativeTestDoesNotOwnGatewayTruth": true,
+                        "staticBootstrapIsNotNativeClient": true
+                    }
+                },
+                "selectedFlow": {
+                    "flowRef": selected_flow_ref,
+                    "fulfillmentSessionRef": fulfillment_session_ref,
+                    "safeFacts": {
+                        "uiDoesNotSupplyFlowTruth": true,
+                        "fulfillmentSessionBindsLiveDependencyGraph": true
+                    }
+                },
+                "managedLaunchIntent": {
+                    "kind": "browser.managed-launch.intent",
+                    "state": "requested",
+                    "intentRef": launch_intent_ref,
+                    "edgeRef": managed_launch_edge_ref,
+                    "browserFamily": "firefox",
+                    "appSubversionRef": app_subversion_ref,
+                    "urlParamRefs": [
+                        format!("url-param:runRef:{run_ref}"),
+                        format!("url-param:testContractRef:{test_contract_ref}"),
+                        format!("url-param:profileRef:{profile_ref}")
+                    ],
+                    "safeFacts": {
+                        "managedLaunchIsHostCapabilityIntent": true,
+                        "launchEdgeDoesNotOwnProductProof": true,
+                        "firefoxIsEvidenceParticipantNotReducerOwner": true
+                    }
+                },
+                "materialization": {
+                    "state": "ready",
+                    "materializationRefs": materialization_refs,
+                    "materializationDigestRef": format!("sha256:{digest}"),
+                    "safeFacts": {
+                        "contractRunMaterializationIsNativeTooling": true,
+                        "localPathOrDevServerIsAdapterEvidenceOnly": true
+                    }
+                },
+                "evidence": {
+                    "state": "ready",
+                    "contractEvidenceRefs": evidence_refs,
+                    "observationMaterializationRefs": observation_refs,
+                    "nativeContractOrchestrationProof": {
+                        "state": "ready",
+                        "scope": "contract-orchestration"
+                    },
+                    "liveFirefoxProof": {
+                        "state": live_state,
+                        "scope": "end-to-end-assumption-proof",
+                        "requiredEvidenceRefs": required_live_evidence_refs
+                    }
+                },
+                "retention": {
+                    "state": "planned",
+                    "policyRef": retention_policy_ref,
+                    "safeFacts": {
+                        "runEvidenceRetentionIsContractPolicy": true,
+                        "proofArtifactsCanBeRetainedByRunContract": true
+                    }
+                },
+                "blockedReasons": [],
+                "safeFacts": {
+                    "cliOwnsNativeContractRunMaterialization": true,
+                    "workspaceOpsIsAdapterOnly": true,
+                    "nodeJsDoesNotOwnNativeProofHost": true,
+                    "browserObservationTransportIsNotThePrimitive": true,
+                    "firefoxProofIsAssumptionEvidence": true,
+                    "nativeProofCanCoverContractAndOrchestrationWithoutFirefox": true
+                }
+            });
+            print_value(ctx.json, &output, || human_test_run(&output))
+        }
+    }
+}
+
+fn human_test_run(value: &Value) -> String {
+    format!(
+        "test run {}\ncontract {}\nstate {}\nlive firefox {}",
+        value["runRef"].as_str().unwrap_or("unknown"),
+        value["testContractRef"].as_str().unwrap_or("unknown"),
+        value["state"].as_str().unwrap_or("unknown"),
+        value["evidence"]["liveFirefoxProof"]["state"]
+            .as_str()
+            .unwrap_or("unknown")
+    )
+}
+
+fn run_lifecycle(ctx: AppContext, command: LifecycleCommand) -> Result<()> {
+    match command.command {
+        LifecycleSubcommand::Request(args) => {
+            let input = if let Some(path) = args.input.as_ref() {
+                Some(
+                    serde_json::from_str::<Value>(&std::fs::read_to_string(path).with_context(
+                        || format!("failed to read lifecycle posture input {}", path.display()),
+                    )?)
+                    .context("failed to parse lifecycle posture input")?,
+                )
+            } else {
+                None
+            };
+            let operation = input_string(&input, "operation").unwrap_or(args.operation);
+            let subject_ref = input_string(&input, "subjectRef").unwrap_or(args.subject_ref);
+            let manager_ref = input_string(&input, "managerRef").unwrap_or(args.manager_ref);
+            let requester_ref = input_string(&input, "requesterRef").unwrap_or(args.requester_ref);
+            let service_refs =
+                input_string_array(&input, "serviceRefs").unwrap_or(args.service_refs);
+            let capability_refs =
+                input_string_array(&input, "capabilityRefs").unwrap_or(args.capability_refs);
+            let authority_refs =
+                input_string_array(&input, "authorityRefs").unwrap_or(args.authority_refs);
+            let grant_refs = input_string_array(&input, "grantRefs").unwrap_or(args.grant_refs);
+            let evidence_refs =
+                input_string_array(&input, "evidenceRefs").unwrap_or(args.evidence_refs);
+            let proof_refs = input_string_array(&input, "proofRefs").unwrap_or(args.proof_refs);
+            let release_ref = input_string(&input, "releaseRef").or(args.release_ref);
+            let rollback_ref = input_string(&input, "rollbackRef").or(args.rollback_ref);
+            let expires_secs = input_u64(&input, "expiresSecs").unwrap_or(args.expires_secs);
+            let requested_at = now_unix();
+            let manager_id = sanitize_ref(&manager_ref);
+            let subject_id = sanitize_ref(&subject_ref);
+            let operation_id = format!(
+                "lifecycle-request:{}:{}:{}",
+                sanitize_ref(&operation),
+                subject_id,
+                requested_at
+            );
+            let record = ServiceManagerOperationPostureRecord {
+                kind: Some(RECORD_SERVICE_MANAGER_OPERATION_POSTURE.to_string()),
+                operation_id,
+                manager_id,
+                subject_ref,
+                manager_ref,
+                requester_ref,
+                operation,
+                state: SERVICE_MANAGER_OPERATION_STATE_REQUESTED.to_string(),
+                service_refs,
+                capability_refs,
+                authority_refs: if authority_refs.is_empty() {
+                    vec!["authority:lifecycle:operator-cli".to_string()]
+                } else {
+                    authority_refs
+                },
+                grant_refs: if grant_refs.is_empty() {
+                    vec!["grant:lifecycle:operator-cli".to_string()]
+                } else {
+                    grant_refs
+                },
+                runner_operation_ref: None,
+                runner_ref: None,
+                host_ref: Some("host:fabric:local".to_string()),
+                release_ref,
+                rollback_ref,
+                secret_boundary: Value::Null,
+                release_posture: Value::Null,
+                rollback_posture: Value::Null,
+                resource_budget: json!({
+                    "class": "operator-request",
+                    "materialization": "projection-only"
+                }),
+                resource_posture: None,
+                evidence_refs: if evidence_refs.is_empty() {
+                    vec!["evidence:lifecycle-request:operator-cli".to_string()]
+                } else {
+                    evidence_refs
+                },
+                proof_refs,
+                witness_refs: vec![],
+                retention_refs: vec![],
+                release_witness_refs: vec![],
+                blocked_reasons: vec![],
+                safe_facts: json!({
+                    "cliIsActionAdapter": true,
+                    "operatorOwnsLifecycleTruth": false,
+                    "fabricReducesFulfillmentPosture": true,
+                    "typedFlagsArePostureProjection": true,
+                    "commandLineIsAdapterTransport": true
+                }),
+                requested_at,
+                accepted_at: None,
+                started_at: None,
+                completed_at: None,
+                observed_at: Some(requested_at),
+                expires_at: Some(requested_at.saturating_add(expires_secs)),
+            };
+            validate_service_manager_operation_posture(&record)?;
+            print_value(ctx.json, &record, || human_lifecycle_request(&record))
+        }
+    }
+}
+
+fn human_lifecycle_request(record: &ServiceManagerOperationPostureRecord) -> String {
+    format!(
+        "lifecycle request {}\noperation {}\nsubject {}\nstate {}",
+        record.operation_id, record.operation, record.subject_ref, record.state
+    )
 }
 
 fn run_authority(ctx: AppContext, command: AuthorityCommand) -> Result<()> {
@@ -140,6 +597,58 @@ fn now_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn sanitize_ref(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, ':' | '_' | '-' | '.') {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hex::encode(hasher.finalize())
+}
+
+fn storage_object_id(container_ref: &str, content_hash: &str) -> String {
+    sha256_hex(format!("constitute-storage-object-v1|{container_ref}|{content_hash}").as_bytes())
+}
+
+fn input_string(input: &Option<Value>, field: &str) -> Option<String> {
+    input
+        .as_ref()?
+        .get(field)?
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn input_string_array(input: &Option<Value>, field: &str) -> Option<Vec<String>> {
+    let values = input.as_ref()?.get(field)?.as_array()?;
+    Some(
+        values
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .collect(),
+    )
+}
+
+fn input_u64(input: &Option<Value>, field: &str) -> Option<u64> {
+    input.as_ref()?.get(field)?.as_u64()
 }
 
 fn parse_duration_ms(value: Option<&str>) -> Option<u64> {

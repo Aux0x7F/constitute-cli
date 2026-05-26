@@ -25,6 +25,9 @@ pub struct Cli {
 pub enum Command {
     Auth(AuthCommand),
     Authority(AuthorityCommand),
+    Source(SourceCommand),
+    Test(TestCommand),
+    Lifecycle(LifecycleCommand),
     Service(ServiceCommand),
     Capability(CapabilityCommand),
     Channel(ChannelCommand),
@@ -32,6 +35,144 @@ pub enum Command {
     Protocol(ProtocolCommand),
     Config(ConfigCommand),
     Doctor(DoctorArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct LifecycleCommand {
+    #[command(subcommand)]
+    pub command: LifecycleSubcommand,
+}
+
+#[derive(Debug, Args)]
+pub struct TestCommand {
+    #[command(subcommand)]
+    pub command: TestSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TestSubcommand {
+    Run(TestRunArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TestRunArgs {
+    #[arg(long)]
+    pub input: Option<PathBuf>,
+    #[arg(long, default_value = "test-run:native-dev:selected-flow")]
+    pub run_ref: String,
+    #[arg(long, default_value = "test-contract:native-dev:selected-flow")]
+    pub test_contract_ref: String,
+    #[arg(long, default_value = "member:operator-cli")]
+    pub requester_ref: String,
+    #[arg(long, default_value = "app:nvr")]
+    pub app_ref: String,
+    #[arg(long, default_value = "app-subversion:nvr:dev")]
+    pub app_subversion_ref: String,
+    #[arg(long, default_value = "profile:browser")]
+    pub profile_ref: String,
+    #[arg(long, default_value = "runtime:browser:shared-worker")]
+    pub runtime_ref: String,
+    #[arg(long, default_value = "gateway:dev")]
+    pub gateway_ref: String,
+    #[arg(long, default_value = "flow:nvr-preview-media:candidate")]
+    pub selected_flow_ref: String,
+    #[arg(
+        long,
+        default_value = "fulfillment:preview:nvr-preview-media-flow:decomposition"
+    )]
+    pub fulfillment_session_ref: String,
+    #[arg(long, default_value = "edge:firefox:managed-launch")]
+    pub managed_launch_edge_ref: String,
+    #[arg(long, default_value = "retention:test-run:auto")]
+    pub retention_policy_ref: String,
+    #[arg(long = "materialization-ref")]
+    pub materialization_refs: Vec<String>,
+    #[arg(long = "observation-ref")]
+    pub observation_refs: Vec<String>,
+    #[arg(long = "evidence-ref")]
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LifecycleSubcommand {
+    Request(LifecycleRequestArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SourceCommand {
+    #[command(subcommand)]
+    pub command: SourceSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SourceSubcommand {
+    Candidate(SourceCandidateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SourceCandidateArgs {
+    #[arg(long)]
+    pub input: Option<PathBuf>,
+    #[arg(long, default_value = "source:graph:native-dev")]
+    pub source_graph_ref: String,
+    #[arg(long, default_value = "source:snapshot:native-dev:current")]
+    pub parent_snapshot_ref: String,
+    #[arg(long, default_value = "source:candidate:native-dev:current")]
+    pub candidate_ref: String,
+    #[arg(long, default_value = "member:operator-cli")]
+    pub author_ref: String,
+    #[arg(long, default_value = "source:file:native-dev:fixture")]
+    pub file_ref: String,
+    #[arg(long, default_value = "source:path:native-dev:fixture")]
+    pub path_ref: String,
+    #[arg(long, default_value = "authoring/fixture.txt")]
+    pub virtual_path: String,
+    #[arg(long, default_value = "authoring candidate fixture")]
+    pub content: String,
+    #[arg(long, default_value = "storage:container:source-candidate")]
+    pub storage_container_ref: String,
+    #[arg(long = "branch-ref")]
+    pub branch_refs: Vec<String>,
+    #[arg(long = "writer-grant-ref")]
+    pub writer_grant_refs: Vec<String>,
+    #[arg(long = "authority-ref")]
+    pub authority_refs: Vec<String>,
+    #[arg(long = "dirty-projection-ref")]
+    pub dirty_projection_refs: Vec<String>,
+    #[arg(long = "evidence-ref")]
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct LifecycleRequestArgs {
+    #[arg(long)]
+    pub input: Option<PathBuf>,
+    #[arg(long, default_value = "promote")]
+    pub operation: String,
+    #[arg(long, default_value = "source:snapshot:native-dev:current")]
+    pub subject_ref: String,
+    #[arg(long, default_value = "manager:host-fabric:lifecycle")]
+    pub manager_ref: String,
+    #[arg(long, default_value = "member:operator-cli")]
+    pub requester_ref: String,
+    #[arg(long = "service-ref")]
+    pub service_refs: Vec<String>,
+    #[arg(long = "capability-ref")]
+    pub capability_refs: Vec<String>,
+    #[arg(long = "authority-ref")]
+    pub authority_refs: Vec<String>,
+    #[arg(long = "grant-ref")]
+    pub grant_refs: Vec<String>,
+    #[arg(long = "evidence-ref")]
+    pub evidence_refs: Vec<String>,
+    #[arg(long = "proof-ref")]
+    pub proof_refs: Vec<String>,
+    #[arg(long)]
+    pub release_ref: Option<String>,
+    #[arg(long)]
+    pub rollback_ref: Option<String>,
+    #[arg(long, default_value_t = 600)]
+    pub expires_secs: u64,
 }
 
 #[derive(Debug, Args)]
