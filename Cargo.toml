@@ -17,7 +17,7 @@ base64 = "0.22"
 cbc = { version = "0.1", features = ["alloc"] }
 chacha20poly1305 = { version = "0.10", features = ["std"] }
 clap = { version = "4.5", features = ["derive"] }
-constitute-protocol = { git = "https://github.com/Aux0x7F/constitute-protocol", branch = "main" }
+constitute-protocol = { path = "../constitute-protocol" }
 dirs = "6"
 hex = "0.4"
 keyring = { version = "3", optional = true }
@@ -41,3 +41,6 @@ os-keyring = ["dep:keyring"]
 assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
+
+[patch."https://github.com/Aux0x7F/constitute-protocol"]
+constitute-protocol = { path = "../constitute-protocol" }

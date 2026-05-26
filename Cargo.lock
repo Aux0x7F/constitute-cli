@@ -350,7 +350,6 @@ dependencies = [
 [[package]]
 name = "constitute-protocol"
 version = "0.1.0"
-source = "git+https://github.com/Aux0x7F/constitute-protocol?branch=main#e0db94216f0a57bf427086f225156db4625717cd"
 dependencies = [
  "anyhow",
  "base64",

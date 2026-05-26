@@ -45,12 +45,305 @@ fn help_exposes_protocol_native_commands() {
         ))
         .stdout(predicate::str::contains("doctor"))
         .stdout(predicate::str::contains("authority"))
+        .stdout(predicate::str::contains("source"))
+        .stdout(predicate::str::contains("test"))
+        .stdout(predicate::str::contains("lifecycle"))
         .stdout(predicate::str::contains("service"))
         .stdout(predicate::str::contains("capability"))
         .stdout(predicate::str::contains("channel"))
         .stdout(predicate::str::contains("diagnostics"))
         .stdout(predicate::str::contains("protocol"))
         .stdout(predicate::str::contains("config"));
+}
+
+#[test]
+fn source_candidate_outputs_protocol_source_snapshot() {
+    let output = Command::cargo_bin("constitute")
+        .unwrap()
+        .args([
+            "--json",
+            "source",
+            "candidate",
+            "--source-graph-ref",
+            "source:graph:native-dev",
+            "--parent-snapshot-ref",
+            "source:snapshot:native-dev:constitute-cli:parent",
+            "--candidate-ref",
+            "source:candidate:native-dev:constitute-cli:test",
+            "--author-ref",
+            "member:operator-cli",
+            "--dirty-projection-ref",
+            "materialized:source-index:native-dev:constitute-cli:dirty",
+            "--evidence-ref",
+            "proof-event:operator:authoring-candidate-fixture",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let record: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(record["kind"], constitute_protocol::RECORD_SOURCE_SNAPSHOT);
+    assert_eq!(
+        record["parentSnapshotRefs"][0],
+        "source:snapshot:native-dev:constitute-cli:parent"
+    );
+    assert_eq!(
+        record["candidateRefs"][0],
+        "source:candidate:native-dev:constitute-cli:test"
+    );
+    assert_eq!(record["signaturePosture"], "devUnsigned");
+    assert!(
+        record["treeHashRef"]
+            .as_str()
+            .unwrap()
+            .starts_with("sha256:")
+    );
+    assert!(
+        record["storageObjectRefs"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("storage:object:")
+    );
+}
+
+#[test]
+fn source_candidate_accepts_typed_input_posture() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("source-candidate-input.json");
+    std::fs::write(
+        &input_path,
+        serde_json::json!({
+            "kind": "authoring.edit-intent.posture",
+            "sourceGraphRef": "source:graph:native-dev",
+            "parentSnapshotRef": "source:snapshot:native-dev:constitute-cli:parent",
+            "candidateRef": "source:candidate:native-dev:constitute-cli:typed-input",
+            "authorRef": "member:operator-cli",
+            "fileRef": "source:file:constitute-cli:README.md",
+            "pathRef": "source:path:constitute-cli:README.md",
+            "virtualPath": "README.md",
+            "content": "typed posture input candidate",
+            "storageContainerRef": "storage:container:source-candidate:constitute-cli",
+            "dirtyProjectionRefs": ["materialized:source-index:native-dev:constitute-cli:dirty"],
+            "evidenceRefs": ["proof-event:operator:authoring-edit-intent"]
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("constitute")
+        .unwrap()
+        .args(["--json", "source", "candidate", "--input"])
+        .arg(&input_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let record: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(record["kind"], constitute_protocol::RECORD_SOURCE_SNAPSHOT);
+    assert_eq!(
+        record["candidateRefs"][0],
+        "source:candidate:native-dev:constitute-cli:typed-input"
+    );
+    assert_eq!(record["fileEntries"][0]["virtualPath"], "README.md");
+    assert_eq!(
+        record["evidenceRefs"][0],
+        "proof-event:operator:authoring-edit-intent"
+    );
+}
+
+#[test]
+fn source_candidate_rejects_untyped_input_posture() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("source-candidate-input.json");
+    std::fs::write(
+        &input_path,
+        serde_json::json!({
+            "kind": "raw.command.payload",
+            "candidateRef": "source:candidate:native-dev:constitute-cli:bad-input",
+            "content": "not a supported source candidate posture"
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    Command::cargo_bin("constitute")
+        .unwrap()
+        .args(["--json", "source", "candidate", "--input"])
+        .arg(&input_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unsupported source candidate input posture kind",
+        ));
+}
+
+#[test]
+fn test_run_outputs_native_contract_run_materialization() {
+    let output = Command::cargo_bin("constitute")
+        .unwrap()
+        .args([
+            "--json",
+            "test",
+            "run",
+            "--run-ref",
+            "test-run:native-dev:selected-flow:fixture",
+            "--test-contract-ref",
+            "test-contract:native-dev:selected-flow",
+            "--app-subversion-ref",
+            "app-subversion:nvr:dev",
+            "--profile-ref",
+            "profile:browser",
+            "--selected-flow-ref",
+            "flow:nvr-preview-media:candidate",
+            "--fulfillment-session-ref",
+            "fulfillment:preview:nvr-preview-media-flow:decomposition",
+            "--observation-ref",
+            "observation:runtime:nvr-preview:materialized",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let record: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(record["kind"], "test.contract-run.materialization");
+    assert_eq!(record["state"], "ready");
+    assert_eq!(
+        record["selectedFlow"]["fulfillmentSessionRef"],
+        "fulfillment:preview:nvr-preview-media-flow:decomposition"
+    );
+    assert_eq!(record["managedLaunchIntent"]["browserFamily"], "firefox");
+    assert_eq!(
+        record["evidence"]["nativeContractOrchestrationProof"]["state"],
+        "ready"
+    );
+    assert_eq!(
+        record["evidence"]["liveFirefoxProof"]["state"],
+        "evidenceMaterialized"
+    );
+    assert_eq!(record["safeFacts"]["workspaceOpsIsAdapterOnly"], true);
+    assert_eq!(
+        record["safeFacts"]["nativeProofCanCoverContractAndOrchestrationWithoutFirefox"],
+        true
+    );
+}
+
+#[test]
+fn test_run_accepts_typed_contract_run_input_posture() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("contract-run-input.json");
+    std::fs::write(
+        &input_path,
+        serde_json::json!({
+            "kind": "test.contract-run.input.posture",
+            "runRef": "test-run:native-dev:selected-flow:typed",
+            "testContractRef": "test-contract:native-dev:selected-flow",
+            "appRef": "app:nvr",
+            "appSubversionRef": "app-subversion:nvr:typed",
+            "profileRef": "profile:browser",
+            "runtimeRef": "runtime:browser:shared-worker",
+            "gatewayRef": "gateway:dev",
+            "selectedFlowRef": "flow:nvr-preview-media:candidate",
+            "fulfillmentSessionRef": "fulfillment:preview:nvr-preview-media-flow:decomposition",
+            "managedLaunchEdgeRef": "edge:firefox:managed-launch",
+            "retentionPolicyRef": "retention:test-run:auto",
+            "materializationRefs": ["materialization:test-contract-run:typed"],
+            "evidenceRefs": ["evidence:contract-run:orchestration"],
+            "observationRefs": []
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("constitute")
+        .unwrap()
+        .args(["--json", "test", "run", "--input"])
+        .arg(&input_path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let record: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(record["kind"], "test.contract-run.materialization");
+    assert_eq!(record["runRef"], "test-run:native-dev:selected-flow:typed");
+    assert_eq!(record["appSubversionRef"], "app-subversion:nvr:typed");
+    assert_eq!(record["evidence"]["liveFirefoxProof"]["state"], "pending");
+    assert_eq!(
+        record["materialization"]["materializationRefs"][0],
+        "materialization:test-contract-run:typed"
+    );
+}
+
+#[test]
+fn test_run_rejects_untyped_contract_run_input_posture() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("contract-run-input.json");
+    std::fs::write(
+        &input_path,
+        serde_json::json!({
+            "kind": "raw.browser-proof.payload",
+            "runRef": "test-run:native-dev:selected-flow:bad"
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    Command::cargo_bin("constitute")
+        .unwrap()
+        .args(["--json", "test", "run", "--input"])
+        .arg(&input_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unsupported test run input posture kind",
+        ));
+}
+
+#[test]
+fn lifecycle_request_outputs_service_manager_operation_intent() {
+    let output = Command::cargo_bin("constitute")
+        .unwrap()
+        .args([
+            "--json",
+            "lifecycle",
+            "request",
+            "--operation",
+            "promote",
+            "--subject-ref",
+            "source:snapshot:native-dev:constitute-build:head",
+            "--service-ref",
+            "service:build",
+            "--evidence-ref",
+            "proof-event:operator:cli-lifecycle-bridge",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let record: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(
+        record["kind"],
+        constitute_protocol::RECORD_SERVICE_MANAGER_OPERATION_POSTURE
+    );
+    assert_eq!(record["operation"], "promote");
+    assert_eq!(record["state"], "requested");
+    assert_eq!(
+        record["subjectRef"],
+        "source:snapshot:native-dev:constitute-build:head"
+    );
+    assert_eq!(record["safeFacts"]["cliIsActionAdapter"], true);
+    assert_eq!(record["safeFacts"]["operatorOwnsLifecycleTruth"], false);
+    assert_eq!(record["safeFacts"]["typedFlagsArePostureProjection"], true);
+    assert_eq!(record["safeFacts"]["commandLineIsAdapterTransport"], true);
 }
 
 #[test]

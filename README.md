@@ -22,6 +22,32 @@ This emits a protocol-validated `authority.multiIdentity.proof` record for the
 Aux-to-agent full-access proof shape. The record keeps sync, read,
 write/reduce, and revoke/expire checks on their own agreement planes.
 
+Source candidate:
+
+```bash
+constitute --json source candidate --candidate-ref source:candidate:native-dev:current
+constitute --json source candidate --input ./tmp/source-candidate-input.json
+```
+
+This emits a protocol-validated `source.snapshot` candidate from typed
+authoring posture flags or a typed input posture passed through `--input`. It is
+a native source lifecycle surface; local files and folder mounts remain
+materializations of the refs carried by the record. Input posture must declare a
+supported kind such as `source.candidate.input.posture`,
+`authoring.edit-intent.posture`, or `authoring.candidate-fixture.posture`; raw
+command payloads are rejected at the adapter boundary.
+
+Lifecycle request:
+
+```bash
+constitute --json lifecycle request --operation promote --subject-ref source:snapshot:native-dev:current
+```
+
+This emits a protocol-validated service-manager operation intent. Its flags
+are typed posture projection at the adapter boundary, not imperative truth.
+The CLI is the action adapter; lifecycle truth still reduces through
+contracts, fabric posture, and selected fulfillers.
+
 Useful test-data checks:
 
 ```bash
